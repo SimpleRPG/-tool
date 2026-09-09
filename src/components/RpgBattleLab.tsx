@@ -479,8 +479,8 @@ export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTest
                 onChange={(e) => setSelectedEnemyId(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg p-2 text-sm font-semibold outline-none focus:border-sky-500"
               >
-                {enemies.map((e) => (
-                  <option key={e.id} value={e.id}>
+                {enemies.map((e, idx) => (
+                  <option key={`${e.id}_${idx}`} value={e.id}>
                     {e.sprite || "👾"} {e.name} (HP: {e.hp} / ATK: {e.atk} / DEF: {e.def} / {e.gold}G)
                   </option>
                 ))}
@@ -595,8 +595,8 @@ export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTest
                 onChange={(e) => setSelectedWeaponId(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg p-2 text-xs font-semibold outline-none"
               >
-                {weapons.map((w) => (
-                  <option key={w.id} value={w.id}>
+                {weapons.map((w, idx) => (
+                  <option key={`${w.id}_${idx}`} value={w.id}>
                     ⚔️ {w.name} (攻撃力: {w.atk})
                   </option>
                 ))}
@@ -628,8 +628,8 @@ export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTest
                 onChange={(e) => setSelectedArmorId(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-lg p-2 text-xs font-semibold outline-none"
               >
-                {armors.map((a) => (
-                  <option key={a.id} value={a.id}>
+                {armors.map((a, idx) => (
+                  <option key={`${a.id}_${idx}`} value={a.id}>
                     🛡️ {a.name} (防御力: {a.def})
                   </option>
                 ))}

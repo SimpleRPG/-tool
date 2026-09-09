@@ -1,5 +1,6 @@
 // Miki AI Memory Layers Implementation for SimpleRPG Dev Studio
 // Combines Long-Term Memory, Structural Graph Memory, Meta-Memory, and Brain Capsule Storage
+// Backed by Capacitor Preferences & Filesystem with automatic browser dev fallback.
 
 import {
   MikiLongTermMemory,
@@ -9,12 +10,11 @@ import {
   MemoryGraphNode,
   SimpleRpgFile,
 } from "../types";
+import { nativeStorage } from "./nativeStorage";
 
-const STORAGE_KEYS = {
-  LONG_TERM: "miki_rpg_long_term_memory_v1",
-  STRUCTURAL: "miki_rpg_structural_memory_v1",
-  CAPSULES: "miki_rpg_brain_capsules_v1",
-  META: "miki_rpg_meta_memory_v1",
+const KEYS = {
+  LONG_TERM: "miki_rpg_long_term_memory_v2",
+  CAPSULE_INDEX: "miki_rpg_capsule_index_v2",
 };
 
 // Initial Long-Term Memories
@@ -46,38 +46,36 @@ const INITIAL_MEMORIES: MikiLongTermMemory[] = [
   },
 ];
 
+type CapsuleMeta = Omit<MikiBrainCapsule, "files">;
+
 export class MikiMemoryService {
   // ----------------------------------------------------
-  // 1. Long-Term Memory (長期エピソード記憶)
+  // 1. Long-Term Memory (localStorage → Preferences化、非同期に変更)
   // ----------------------------------------------------
-  static getLongTermMemories(): MikiLongTermMemory[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.LONG_TERM);
-      if (!data) return INITIAL_MEMORIES;
-      return JSON.parse(data);
-    } catch {
-      return INITIAL_MEMORIES;
-    }
+  static async getLongTermMemories(): Promise<MikiLongTermMemory[]> {
+    return nativeStorage.getJSON(KEYS.LONG_TERM, INITIAL_MEMORIES);
   }
 
-  static addMemory(memory: Omit<MikiLongTermMemory, "id" | "timestamp">): MikiLongTermMemory {
-    const list = this.getLongTermMemories();
+  static async addMemory(
+    memory: Omit<MikiLongTermMemory, "id" | "timestamp">
+  ): Promise<MikiLongTermMemory> {
+    const list = await this.getLongTermMemories();
     const newEntry: MikiLongTermMemory = {
       ...memory,
       id: `mem_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       timestamp: Date.now(),
     };
-    const updated = [newEntry, ...list].slice(0, 100); // keep up to 100 recent episodic memories
-    try {
-      localStorage.setItem(STORAGE_KEYS.LONG_TERM, JSON.stringify(updated));
-    } catch (e) {
-      console.warn("MikiMemory: Failed to persist memory:", e);
-    }
+    const updated = [newEntry, ...list].slice(0, 300);
+    await nativeStorage.setJSON(KEYS.LONG_TERM, updated);
     return newEntry;
   }
 
+  static async clearMemories(): Promise<void> {
+    await nativeStorage.setJSON(KEYS.LONG_TERM, []);
+  }
+
   // ----------------------------------------------------
-  // 2. Structural Memory (構造化グラフ記憶)
+  // 2. Structural Memory: 既存の buildStructuralGraph (純粋関数)
   // ----------------------------------------------------
   static buildStructuralGraph(files: SimpleRpgFile[]): MikiStructuralMemory {
     const nodes: MemoryGraphNode[] = [];
@@ -225,44 +223,51 @@ export class MikiMemoryService {
   }
 
   // ----------------------------------------------------
-  // 4. Brain Capsule Storage (カプセル化・スナップショット)
+  // 4. Brain Capsule: メタ情報は Preferences、ファイル実体は Filesystem
   // ----------------------------------------------------
-  static getBrainCapsules(): MikiBrainCapsule[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.CAPSULES);
-      if (!data) return [];
-      return JSON.parse(data);
-    } catch {
-      return [];
-    }
+  static async getBrainCapsules(): Promise<MikiBrainCapsule[]> {
+    const index = await nativeStorage.getJSON<CapsuleMeta[]>(KEYS.CAPSULE_INDEX, []);
+    return Promise.all(
+      index.map(async (meta) => {
+        const files =
+          (await nativeStorage.readLargeFile<Record<string, string>>(meta.id)) || {};
+        return { ...meta, files };
+      })
+    );
   }
 
-  static createBrainCapsule(label: string, files: SimpleRpgFile[], description?: string): MikiBrainCapsule {
-    const capsules = this.getBrainCapsules();
+  static async createBrainCapsule(
+    label: string,
+    files: SimpleRpgFile[],
+    description?: string
+  ): Promise<MikiBrainCapsule> {
+    const index = await nativeStorage.getJSON<CapsuleMeta[]>(KEYS.CAPSULE_INDEX, []);
     const filesDict: Record<string, string> = {};
     files.forEach((f) => {
       filesDict[f.path] = f.content;
     });
 
-    const newCapsule: MikiBrainCapsule = {
-      id: `capsule_${Date.now()}`,
+    const id = `capsule_${Date.now()}`;
+    const meta: CapsuleMeta = {
+      id,
       label,
       timestamp: Date.now(),
       description: description || `スナップショット (${files.length}ファイル保存)`,
-      files: filesDict,
-      memoryCount: this.getLongTermMemories().length,
+      memoryCount: (await this.getLongTermMemories()).length,
       tags: ["スナップショット", "ロールバック可能"],
     };
 
-    const updated = [newCapsule, ...capsules].slice(0, 20); // keep 20 snapshots
-    try {
-      localStorage.setItem(STORAGE_KEYS.CAPSULES, JSON.stringify(updated));
-    } catch (e) {
-      console.warn("Failed to persist capsule to localStorage:", e);
-    }
+    await nativeStorage.writeLargeFile(id, filesDict);
 
-    // Also record in long term memory
-    this.addMemory({
+    const MAX_CAPSULES = 50;
+    const updatedIndex = [meta, ...index].slice(0, MAX_CAPSULES);
+    const overflow = index.slice(MAX_CAPSULES - 1);
+    for (const old of overflow) {
+      await nativeStorage.deleteLargeFile(old.id);
+    }
+    await nativeStorage.setJSON(KEYS.CAPSULE_INDEX, updatedIndex);
+
+    await this.addMemory({
       type: "snapshot_created",
       title: `カプセル保存: ${label}`,
       description: `全${files.length}個のしんぷるRPGファイルをスナップショットとして退避しました。`,
@@ -271,11 +276,15 @@ export class MikiMemoryService {
       tags: ["カプセル", "安全バックアップ"],
     });
 
-    return newCapsule;
+    return { ...meta, files: filesDict };
   }
 
-  static deleteCapsule(id: string): void {
-    const list = this.getBrainCapsules().filter((c) => c.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CAPSULES, JSON.stringify(list));
+  static async deleteCapsule(id: string): Promise<void> {
+    const index = await nativeStorage.getJSON<CapsuleMeta[]>(KEYS.CAPSULE_INDEX, []);
+    await nativeStorage.setJSON(
+      KEYS.CAPSULE_INDEX,
+      index.filter((c) => c.id !== id)
+    );
+    await nativeStorage.deleteLargeFile(id);
   }
 }

@@ -97,8 +97,8 @@ export const MikiTestBotPanel: React.FC<Props> = ({ files, onTestCompleted }) =>
               onChange={(e) => setSelectedEnemyId(e.target.value)}
               className="flex-1 bg-slate-900 border border-slate-700 text-slate-100 font-bold rounded-lg px-2.5 py-1.5 outline-none text-xs cursor-pointer focus:border-indigo-500"
             >
-              {scanReport.enemies.map((enemy) => (
-                <option key={enemy.id} value={enemy.id}>
+              {scanReport.enemies.map((enemy, idx) => (
+                <option key={`${enemy.id}_${idx}`} value={enemy.id}>
                   {enemy.name} (HP: {enemy.hp} / ATK: {enemy.atk})
                 </option>
               ))}
@@ -115,8 +115,8 @@ export const MikiTestBotPanel: React.FC<Props> = ({ files, onTestCompleted }) =>
               onChange={(e) => setSelectedWeaponId(e.target.value)}
               className="flex-1 bg-slate-900 border border-slate-700 text-slate-100 font-bold rounded-lg px-2.5 py-1.5 outline-none text-xs cursor-pointer focus:border-amber-500"
             >
-              {scanReport.weapons.map((wpn) => (
-                <option key={wpn.id} value={wpn.id}>
+              {scanReport.weapons.map((wpn, idx) => (
+                <option key={`${wpn.id}_${idx}`} value={wpn.id}>
                   {wpn.name} (ATK: {wpn.atk})
                 </option>
               ))}

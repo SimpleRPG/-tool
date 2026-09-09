@@ -10,6 +10,7 @@ import { DEFAULT_SIMPLE_RPG_FILES } from "./data/defaultSimpleRpgFiles";
 import { RPG_BUILTIN_RECIPES, applyDiffsToFile } from "./services/rpgLocalParser";
 import { DynamicPatchGenerator } from "./services/dynamicPatchGenerator";
 import { MikiMemoryService } from "./services/mikiMemoryService";
+import { nativeStorage } from "./services/nativeStorage";
 import { RpgGamePreview } from "./components/RpgGamePreview";
 import { CommandInputBar } from "./components/CommandInputBar";
 import { MikiTestBotPanel } from "./components/MikiTestBotPanel";
@@ -39,34 +40,30 @@ type MobileTab = "game" | "patch" | "test" | "memory" | "code";
 
 export default function App() {
   // 1. Virtual File System for SimpleRPG
-  const [files, setFiles] = useState<SimpleRpgFile[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_VFS_KEY);
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.warn("Could not restore VFS files from localStorage:", e);
-    }
-    return DEFAULT_SIMPLE_RPG_FILES;
-  });
-
-  // Save VFS to localStorage whenever updated
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_VFS_KEY, JSON.stringify(files));
-    } catch (e) {
-      console.warn("Failed to persist VFS to localStorage:", e);
-    }
-  }, [files]);
+  const [files, setFiles] = useState<SimpleRpgFile[]>(DEFAULT_SIMPLE_RPG_FILES);
 
   // 2. Miki AI Memories & Brain Capsules State
-  const [memories, setMemories] = useState<MikiLongTermMemory[]>(() =>
-    MikiMemoryService.getLongTermMemories()
-  );
-  const [capsules, setCapsules] = useState<MikiBrainCapsule[]>(() =>
-    MikiMemoryService.getBrainCapsules()
-  );
+  const [memories, setMemories] = useState<MikiLongTermMemory[]>([]);
+  const [capsules, setCapsules] = useState<MikiBrainCapsule[]>([]);
+  const [storageReady, setStorageReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const savedFiles = await nativeStorage.getJSON<SimpleRpgFile[] | null>(STORAGE_VFS_KEY, null);
+      if (savedFiles && Array.isArray(savedFiles) && savedFiles.length > 0) {
+        setFiles(savedFiles);
+      }
+      setMemories(await MikiMemoryService.getLongTermMemories());
+      setCapsules(await MikiMemoryService.getBrainCapsules());
+      setStorageReady(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return; // ロード完了前に空データで上書き保存しないためのガード
+    nativeStorage.setJSON(STORAGE_VFS_KEY, files);
+  }, [files, storageReady]);
+
   const [activePatchBadge, setActivePatchBadge] = useState<string | null>(null);
   const [lastDiffs, setLastDiffs] = useState<CodeDiffBlock[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -143,7 +140,7 @@ export default function App() {
   };
 
   // Apply Diffs to Files (from Parser or Recipe)
-  const handleApplyDiffs = (diffs: CodeDiffBlock[], log: string, patchTitle: string) => {
+  const handleApplyDiffs = async (diffs: CodeDiffBlock[], log: string, patchTitle: string) => {
     playTactileChime();
 
     const updatedFiles = files.map((file) => {
@@ -167,7 +164,7 @@ export default function App() {
 
     // Save episode to Miki Long-Term Memory
     const affectedFiles = Array.from(new Set(diffs.map((d) => d.file)));
-    MikiMemoryService.addMemory({
+    await MikiMemoryService.addMemory({
       type: "patch_applied",
       title: `パッチ適用: ${patchTitle}`,
       description: log,
@@ -176,7 +173,7 @@ export default function App() {
       tags: ["パッチ", "ローカル反映", "ゼロレイテンシ"],
     });
 
-    setMemories(MikiMemoryService.getLongTermMemories());
+    setMemories(await MikiMemoryService.getLongTermMemories());
   };
 
   // Apply Built-in Recipe
@@ -185,7 +182,7 @@ export default function App() {
   };
 
   // Direct manual code update from editor
-  const handleUpdateFileContent = (path: string, newContent: string) => {
+  const handleUpdateFileContent = async (path: string, newContent: string) => {
     playTactileChime();
     const updated = files.map((f) => {
       if (f.path === path) {
@@ -200,7 +197,7 @@ export default function App() {
     });
     setFiles(updated);
 
-    MikiMemoryService.addMemory({
+    await MikiMemoryService.addMemory({
       type: "manual_edit",
       title: `手動コード編集: ${path}`,
       description: `${path} をエディタから直接編集保存しました。`,
@@ -208,18 +205,18 @@ export default function App() {
       affectedFiles: [path],
       tags: ["手動編集", "直接保存"],
     });
-    setMemories(MikiMemoryService.getLongTermMemories());
+    setMemories(await MikiMemoryService.getLongTermMemories());
   };
 
   // Reset a single file back to default
-  const handleResetFile = (path: string) => {
+  const handleResetFile = async (path: string) => {
     const defaultFile = DEFAULT_SIMPLE_RPG_FILES.find((f) => f.path === path);
     if (!defaultFile) return;
 
     const updated = files.map((f) => (f.path === path ? { ...defaultFile } : f));
     setFiles(updated);
 
-    MikiMemoryService.addMemory({
+    await MikiMemoryService.addMemory({
       type: "file_reset",
       title: `ファイルリセット: ${path}`,
       description: `${path} を標準初期状態に戻しました。`,
@@ -227,21 +224,17 @@ export default function App() {
       affectedFiles: [path],
       tags: ["リセット", "初期化"],
     });
-    setMemories(MikiMemoryService.getLongTermMemories());
+    setMemories(await MikiMemoryService.getLongTermMemories());
   };
 
   // Reset all VFS to default
-  const handleResetAllToDefault = () => {
+  const handleResetAllToDefault = async () => {
     if (window.confirm("しんぷるRPGの全ファイルを初期状態に戻しますか？")) {
       setFiles(DEFAULT_SIMPLE_RPG_FILES);
       setActivePatchBadge(null);
       setLastDiffs([]);
-      try {
-        localStorage.removeItem(STORAGE_VFS_KEY);
-      } catch (e) {
-        // ignore
-      }
-      MikiMemoryService.addMemory({
+      await nativeStorage.setJSON(STORAGE_VFS_KEY, DEFAULT_SIMPLE_RPG_FILES);
+      await MikiMemoryService.addMemory({
         type: "factory_reset",
         title: "全コード初期化",
         description: "しんぷるRPGの全ソースファイルをファクトリーデフォルトに戻しました。",
@@ -249,19 +242,20 @@ export default function App() {
         affectedFiles: DEFAULT_SIMPLE_RPG_FILES.map((f) => f.path),
         tags: ["全初期化"],
       });
-      setMemories(MikiMemoryService.getLongTermMemories());
+      setMemories(await MikiMemoryService.getLongTermMemories());
     }
   };
 
   // Capsule handlers
-  const handleCreateCapsule = (label: string) => {
-    MikiMemoryService.createBrainCapsule(label, files);
-    setCapsules(MikiMemoryService.getBrainCapsules());
-    setMemories(MikiMemoryService.getLongTermMemories());
+  const handleCreateCapsule = async (label: string) => {
+    await MikiMemoryService.createBrainCapsule(label, files);
+    setCapsules(await MikiMemoryService.getBrainCapsules());
+    setMemories(await MikiMemoryService.getLongTermMemories());
   };
 
-  const handleRestoreCapsule = (id: string) => {
-    const capsule = capsules.find((c) => c.id === id);
+  const handleRestoreCapsule = async (target: string | MikiBrainCapsule) => {
+    const capsuleId = typeof target === "string" ? target : target.id;
+    const capsule = capsules.find((c) => c.id === capsuleId);
     if (!capsule) return;
 
     if (window.confirm(`「${capsule.label}」のスナップショットに復元しますか？現在のコードは上書きされます。`)) {
@@ -278,7 +272,7 @@ export default function App() {
       });
 
       setFiles(restoredFiles);
-      MikiMemoryService.addMemory({
+      await MikiMemoryService.addMemory({
         type: "snapshot_restored",
         title: `カプセル復元: ${capsule.label}`,
         description: `過去のスナップショット (${new Date(capsule.timestamp).toLocaleString()}) にロールバックしました。`,
@@ -286,20 +280,20 @@ export default function App() {
         affectedFiles: Object.keys(capsule.files),
         tags: ["ロールバック", "復元"],
       });
-      setMemories(MikiMemoryService.getLongTermMemories());
+      setMemories(await MikiMemoryService.getLongTermMemories());
     }
   };
 
-  const handleDeleteCapsule = (id: string) => {
-    MikiMemoryService.deleteCapsule(id);
-    setCapsules(MikiMemoryService.getBrainCapsules());
+  const handleDeleteCapsule = async (id: string) => {
+    await MikiMemoryService.deleteCapsule(id);
+    setCapsules(await MikiMemoryService.getBrainCapsules());
   };
 
   // Import ZIP files into studio
-  const handleImportFiles = (newFiles: SimpleRpgFile[]) => {
+  const handleImportFiles = async (newFiles: SimpleRpgFile[]) => {
     setFiles(newFiles);
     setActivePatchBadge(null);
-    MikiMemoryService.addMemory({
+    await MikiMemoryService.addMemory({
       type: "snapshot_created",
       title: "ZIPアーカイブ読み込み",
       description: `外部ZIPから ${newFiles.length} 個のしんぷるRPGファイルを読み込みました。`,
@@ -307,7 +301,7 @@ export default function App() {
       affectedFiles: newFiles.map((f) => f.path),
       tags: ["ZIPインポート", "外部プロジェクト"],
     });
-    setMemories(MikiMemoryService.getLongTermMemories());
+    setMemories(await MikiMemoryService.getLongTermMemories());
     setIsZipModalOpen(false);
     // Switch to game preview immediately so user sees the newly imported game
     setMobileTab("game");
@@ -393,8 +387,8 @@ export default function App() {
               files={files}
               activePatchBadge={activePatchBadge}
               onUpdateFiles={(newFiles) => setFiles(newFiles)}
-              onAutoTestRun={(enemyName, winRate) => {
-                MikiMemoryService.addMemory({
+              onAutoTestRun={async (enemyName, winRate) => {
+                await MikiMemoryService.addMemory({
                   type: "test_result",
                   title: `戦闘ラボ検証: ${enemyName} (勝率${winRate}%)`,
                   description: `戦闘シミュレータにて【${enemyName}】に対する検証を実施。勝率は${winRate}%でした。`,
@@ -407,7 +401,7 @@ export default function App() {
                     balanceScore: winRate >= 70 ? 90 : 65,
                   },
                 });
-                setMemories(MikiMemoryService.getLongTermMemories());
+                setMemories(await MikiMemoryService.getLongTermMemories());
               }}
             />
           </div>
@@ -480,8 +474,8 @@ export default function App() {
             {desktopTab === "miki_test" && (
               <MikiTestBotPanel
                 files={files}
-                onTestCompleted={() => {
-                  setMemories(MikiMemoryService.getLongTermMemories());
+                onTestCompleted={async () => {
+                  setMemories(await MikiMemoryService.getLongTermMemories());
                 }}
               />
             )}
@@ -530,8 +524,8 @@ export default function App() {
                 files={files}
                 activePatchBadge={activePatchBadge}
                 onUpdateFiles={(newFiles) => setFiles(newFiles)}
-                onAutoTestRun={(enemyName, winRate) => {
-                  MikiMemoryService.addMemory({
+                onAutoTestRun={async (enemyName, winRate) => {
+                  await MikiMemoryService.addMemory({
                     type: "test_result",
                     title: `戦闘ラボ検証: ${enemyName} (勝率${winRate}%)`,
                     description: `戦闘シミュレータにて【${enemyName}】に対する検証を実施。勝率は${winRate}%でした。`,
@@ -544,7 +538,7 @@ export default function App() {
                       balanceScore: winRate >= 70 ? 90 : 65,
                     },
                   });
-                  setMemories(MikiMemoryService.getLongTermMemories());
+                  setMemories(await MikiMemoryService.getLongTermMemories());
                 }}
               />
             </div>
@@ -608,8 +602,8 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             <MikiTestBotPanel
               files={files}
-              onTestCompleted={() => {
-                setMemories(MikiMemoryService.getLongTermMemories());
+              onTestCompleted={async () => {
+                setMemories(await MikiMemoryService.getLongTermMemories());
               }}
             />
           </div>

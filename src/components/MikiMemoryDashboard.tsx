@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MikiLongTermMemory,
   MikiStructuralMemory,
@@ -6,6 +6,7 @@ import {
   MikiBrainCapsule,
   SimpleRpgFile,
 } from "../types";
+import { nativeStorage } from "../services/nativeStorage";
 import {
   Brain,
   Layers,
@@ -47,46 +48,50 @@ export const MikiMemoryDashboard: React.FC<Props> = ({
   const [newCapsuleLabel, setNewCapsuleLabel] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Calculate Storage usage in localStorage
-  const storageInfo = React.useMemo(() => {
-    let vfsBytes = 0;
-    let memoriesBytes = 0;
-    let capsulesBytes = 0;
-    let saveSlotBytes = 0;
-    let totalBytes = 0;
+  const [storageUsage, setStorageUsage] = useState({
+    vfsBytes: 0,
+    memoriesBytes: 0,
+    capsulesBytes: 0,
+    saveSlotBytes: 0,
+    totalBytes: 0,
+  });
 
-    try {
-      const vfsRaw = localStorage.getItem("simplerpg_vfs_files_v2") || "";
-      vfsBytes = new Blob([vfsRaw]).size;
-
-      const memRaw = localStorage.getItem("miki_longterm_memories") || "";
-      memoriesBytes = new Blob([memRaw]).size;
-
-      const capRaw = localStorage.getItem("miki_brain_capsules") || "";
-      capsulesBytes = new Blob([capRaw]).size;
-
-      const saveRaw = localStorage.getItem("simplerpg_save_slot_1") || "";
-      saveSlotBytes = new Blob([saveRaw]).size;
-
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k) {
-          totalBytes += new Blob([localStorage.getItem(k) || ""]).size;
-        }
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      const vfsBytes = await nativeStorage.estimateUsageBytes(["simplerpg_vfs_files_v2"]);
+      const memoriesBytes = await nativeStorage.estimateUsageBytes(["miki_rpg_long_term_memory_v2"]);
+      const capsulesBytes = await nativeStorage.estimateUsageBytes(["miki_rpg_capsule_index_v2"]);
+      const saveSlotBytes = await nativeStorage.estimateUsageBytes(["simplerpg_save_slot_1"]);
+      const totalBytes = await nativeStorage.estimateUsageBytes([
+        "simplerpg_vfs_files_v2",
+        "miki_rpg_long_term_memory_v2",
+        "miki_rpg_capsule_index_v2",
+        "simplerpg_save_slot_1",
+      ]);
+      if (isMounted) {
+        setStorageUsage({
+          vfsBytes,
+          memoriesBytes,
+          capsulesBytes,
+          saveSlotBytes,
+          totalBytes,
+        });
       }
-    } catch {
-      // fallback
-    }
-
-    return {
-      vfsKb: (vfsBytes / 1024).toFixed(1),
-      memoriesKb: (memoriesBytes / 1024).toFixed(1),
-      capsulesKb: (capsulesBytes / 1024).toFixed(1),
-      saveSlotKb: (saveSlotBytes / 1024).toFixed(1),
-      totalKb: (totalBytes / 1024).toFixed(1),
-      hasSaveSlot: saveSlotBytes > 0,
+    })();
+    return () => {
+      isMounted = false;
     };
   }, [currentFiles, memories, capsules]);
+
+  const storageInfo = {
+    vfsKb: (storageUsage.vfsBytes / 1024).toFixed(1),
+    memoriesKb: (storageUsage.memoriesBytes / 1024).toFixed(1),
+    capsulesKb: (storageUsage.capsulesBytes / 1024).toFixed(1),
+    saveSlotKb: (storageUsage.saveSlotBytes / 1024).toFixed(1),
+    totalKb: (storageUsage.totalBytes / 1024).toFixed(1),
+    hasSaveSlot: storageUsage.saveSlotBytes > 0,
+  };
 
   const filteredMemories = memories.filter((m) => {
     if (!searchQuery.trim()) return true;

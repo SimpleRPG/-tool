@@ -370,12 +370,78 @@ export class SimpleRpgScanner {
       }
     }
 
+    // Deduplicate entities across all scanned files to ensure unique IDs and clean UI rendering
+    const dedupedEnemies: ScannedEnemy[] = [];
+    const enemyMap = new Map<string, number>();
+    for (const e of enemies) {
+      const key = e.id || e.name;
+      if (!enemyMap.has(key)) {
+        enemyMap.set(key, dedupedEnemies.length);
+        dedupedEnemies.push(e);
+      } else {
+        const existingIdx = enemyMap.get(key)!;
+        const existing = dedupedEnemies[existingIdx];
+        // Prefer dedicated database file or richer entity data
+        if (e.sourceFile.includes("enemy") && !existing.sourceFile.includes("enemy")) {
+          dedupedEnemies[existingIdx] = { ...existing, ...e };
+        } else {
+          dedupedEnemies[existingIdx] = { ...e, ...existing };
+        }
+      }
+    }
+
+    const dedupedWeapons: ScannedWeapon[] = [];
+    const weaponMap = new Map<string, number>();
+    for (const w of weapons) {
+      const key = w.id || w.name;
+      if (!weaponMap.has(key)) {
+        weaponMap.set(key, dedupedWeapons.length);
+        dedupedWeapons.push(w);
+      } else {
+        const existingIdx = weaponMap.get(key)!;
+        const existing = dedupedWeapons[existingIdx];
+        if (w.sourceFile.includes("equip") || w.sourceFile.includes("combat") || w.sourceFile.includes("weapon")) {
+          dedupedWeapons[existingIdx] = { ...existing, ...w };
+        }
+      }
+    }
+
+    const dedupedArmors: ScannedArmor[] = [];
+    const armorMap = new Map<string, number>();
+    for (const a of armors) {
+      const key = a.id || a.name;
+      if (!armorMap.has(key)) {
+        armorMap.set(key, dedupedArmors.length);
+        dedupedArmors.push(a);
+      }
+    }
+
+    const dedupedItems: ScannedItem[] = [];
+    const itemMap = new Map<string, number>();
+    for (const it of items) {
+      const key = it.id || it.name;
+      if (!itemMap.has(key)) {
+        itemMap.set(key, dedupedItems.length);
+        dedupedItems.push(it);
+      }
+    }
+
+    const dedupedSkills: ScannedSkill[] = [];
+    const skillMap = new Map<string, number>();
+    for (const sk of skills) {
+      const key = sk.id || sk.name;
+      if (!skillMap.has(key)) {
+        skillMap.set(key, dedupedSkills.length);
+        dedupedSkills.push(sk);
+      }
+    }
+
     return {
-      enemies,
-      weapons,
-      armors,
-      items,
-      skills,
+      enemies: dedupedEnemies,
+      weapons: dedupedWeapons,
+      armors: dedupedArmors,
+      items: dedupedItems,
+      skills: dedupedSkills,
       player,
       detectedFilesCount: files.length,
     };
