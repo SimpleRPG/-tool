@@ -1,6 +1,6 @@
 {
-  "name": "Game Code Instant Patcher",
-  "description": "A local zero-latency recipe-driven game code patcher and web search item harvester for instant game modification.",
+  "name": "SimpleRPG Dev Studio",
+  "description": "しんぷるRPG専用の完全ローカル開発スタジオ。みきAIの記憶層（長期・構造・メタ記憶）とストレージカプセル、ASTコード解析、0.001秒パッチ、ZIP読み込み・APK出力を統合。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
