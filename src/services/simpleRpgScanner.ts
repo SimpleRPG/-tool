@@ -67,8 +67,16 @@ export interface SimpleRpgScanReport {
   armors: ScannedArmor[];
   items: ScannedItem[];
   skills: ScannedSkill[];
-  player: ScannedPlayerStatus;
+  player: ScannedPlayerStatus | null;
   detectedFilesCount: number;
+  detectionFlags: {
+    enemiesDetected: boolean;
+    weaponsDetected: boolean;
+    armorsDetected: boolean;
+    itemsDetected: boolean;
+    skillsDetected: boolean;
+    playerDetected: boolean;
+  };
 }
 
 export class SimpleRpgScanner {
@@ -81,14 +89,8 @@ export class SimpleRpgScanner {
     const armors: ScannedArmor[] = [];
     const items: ScannedItem[] = [];
     const skills: ScannedSkill[] = [];
-    let player: ScannedPlayerStatus = {
-      hp: 80,
-      maxHp: 80,
-      mp: 30,
-      gold: 120,
-      level: 1,
-      sourceFile: "game-ui.js",
-    };
+    let player: ScannedPlayerStatus | null = null;
+    let playerFound = false;
 
     // Filter code files
     const codeFiles = files.filter(
@@ -161,17 +163,6 @@ export class SimpleRpgScanner {
           });
         }
       }
-    }
-
-    // Default Fallback if no enemies detected in files
-    if (enemies.length === 0) {
-      enemies.push(
-        { id: "slime", name: "みどりスライム", hp: 25, maxHp: 25, atk: 6, def: 2, exp: 8, gold: 5, sprite: "🟢", sourceFile: "game-ui.js" },
-        { id: "goblin", name: "ゴブリン戦士", hp: 55, maxHp: 55, atk: 14, def: 5, exp: 22, gold: 18, sprite: "👺", sourceFile: "game-ui.js" },
-        { id: "skeleton", name: "スケルトンナイト", hp: 95, maxHp: 95, atk: 24, def: 12, exp: 48, gold: 40, sprite: "💀", sourceFile: "game-ui.js" },
-        { id: "fire_drake", name: "火竜ファイア・ドレイク", hp: 280, maxHp: 280, atk: 52, def: 28, exp: 160, gold: 150, sprite: "🐲", sourceFile: "game-ui.js" },
-        { id: "demon_king", name: "冥王デスロード", hp: 650, maxHp: 650, atk: 88, def: 45, exp: 500, gold: 800, sprite: "👑", sourceFile: "game-ui.js" }
-      );
     }
 
     // ========================================================
@@ -251,23 +242,6 @@ export class SimpleRpgScanner {
       }
     }
 
-    if (weapons.length === 0) {
-      weapons.push(
-        { id: "wooden_stick", name: "ひのきの棒", atk: 3, critRate: 0.05, sourceFile: "game-ui.js" },
-        { id: "copper_sword", name: "銅のつるぎ", atk: 12, critRate: 0.08, sourceFile: "game-ui.js" },
-        { id: "steel_claymore", name: "鋼鉄のクレイモア", atk: 32, critRate: 0.12, sourceFile: "game-ui.js" },
-        { id: "holy_excalibur", name: "聖剣エクスカリバー", atk: 140, critRate: 0.35, sourceFile: "game-ui.js" }
-      );
-    }
-
-    if (armors.length === 0) {
-      armors.push(
-        { id: "cloth_tunic", name: "布の服", def: 2, hpBonus: 5, sourceFile: "game-ui.js" },
-        { id: "leather_armor", name: "革のよろい", def: 8, hpBonus: 20, sourceFile: "game-ui.js" },
-        { id: "iron_plate", name: "鉄の胸当て", def: 24, hpBonus: 60, sourceFile: "game-ui.js" }
-      );
-    }
-
     // ========================================================
     // 3. Scan for Items (持ち物)
     // ========================================================
@@ -309,14 +283,6 @@ export class SimpleRpgScanner {
       }
     }
 
-    if (items.length === 0) {
-      items.push(
-        { id: "herb", name: "やくそう", healHp: 35, sourceFile: "game-ui.js" },
-        { id: "high_potion", name: "ハイポーション", healHp: 120, sourceFile: "game-ui.js" },
-        { id: "magic_water", name: "まほうのせいすい", healMp: 50, sourceFile: "game-ui.js" }
-      );
-    }
-
     // ========================================================
     // 4. Scan for Skills & Magic (スキル・魔法)
     // ========================================================
@@ -336,14 +302,6 @@ export class SimpleRpgScanner {
           sourceFile: file.path,
         });
       }
-    }
-
-    if (skills.length === 0) {
-      skills.push(
-        { id: "gigadein", name: "ギガデイン", mpCost: 10, damage: 45, sourceFile: "game-ui.js" },
-        { id: "iai_slash", name: "居合斬り", mpCost: 5, damage: 30, sourceFile: "game-ui.js" },
-        { id: "meditation", name: "瞑想 (HP/MP回復)", mpCost: 0, damage: 0, sourceFile: "game-ui.js" }
-      );
     }
 
     // ========================================================
@@ -366,6 +324,7 @@ export class SimpleRpgScanner {
           level: 1,
           sourceFile: file.path,
         };
+        playerFound = true;
         break;
       }
     }
@@ -436,6 +395,15 @@ export class SimpleRpgScanner {
       }
     }
 
+    const detectionFlags = {
+      enemiesDetected: dedupedEnemies.length > 0,
+      weaponsDetected: dedupedWeapons.length > 0,
+      armorsDetected: dedupedArmors.length > 0,
+      itemsDetected: dedupedItems.length > 0,
+      skillsDetected: dedupedSkills.length > 0,
+      playerDetected: playerFound,
+    };
+
     return {
       enemies: dedupedEnemies,
       weapons: dedupedWeapons,
@@ -444,6 +412,7 @@ export class SimpleRpgScanner {
       skills: dedupedSkills,
       player,
       detectedFilesCount: files.length,
+      detectionFlags,
     };
   }
 
