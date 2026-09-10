@@ -33,6 +33,8 @@ import {
   Smartphone,
   ChevronRight,
 } from "lucide-react";
+import { SchemaAnalyzer } from "./services/schemaAnalyzer";
+import { DetectedSchema } from "./types";
 
 const STORAGE_VFS_KEY = "simplerpg_vfs_files_v2";
 
@@ -74,6 +76,7 @@ export default function App() {
   // For Desktop Right Panel: "miki_test" | "miki_memory" | "code_editor" | "recipes"
   const [desktopTab, setDesktopTab] = useState<"miki_test" | "miki_memory" | "code_editor" | "recipes">("miki_test");
   const [isZipModalOpen, setIsZipModalOpen] = useState(false);
+  const [detectedSchema, setDetectedSchema] = useState<DetectedSchema | null>(null);
 
   // Structural & Meta memories derived from files & history
   const structuralMemory = useMemo(() => {
@@ -293,6 +296,11 @@ export default function App() {
   const handleImportFiles = async (newFiles: SimpleRpgFile[]) => {
     setFiles(newFiles);
     setActivePatchBadge(null);
+
+    // スキーマ解析 (ローカルのみ、Gemini不使用)
+    const schema = SchemaAnalyzer.analyzeSchema(newFiles);
+    setDetectedSchema(schema);
+
     await MikiMemoryService.addMemory({
       type: "snapshot_created",
       title: "ZIPアーカイブ読み込み",
@@ -303,7 +311,6 @@ export default function App() {
     });
     setMemories(await MikiMemoryService.getLongTermMemories());
     setIsZipModalOpen(false);
-    // Switch to game preview immediately so user sees the newly imported game
     setMobileTab("game");
   };
 
@@ -387,6 +394,8 @@ export default function App() {
               files={files}
               activePatchBadge={activePatchBadge}
               onUpdateFiles={(newFiles) => setFiles(newFiles)}
+              detectedSchema={detectedSchema}
+              onUpdateSchema={setDetectedSchema}
               onAutoTestRun={async (enemyName, winRate) => {
                 await MikiMemoryService.addMemory({
                   type: "test_result",
@@ -524,6 +533,8 @@ export default function App() {
                 files={files}
                 activePatchBadge={activePatchBadge}
                 onUpdateFiles={(newFiles) => setFiles(newFiles)}
+                detectedSchema={detectedSchema}
+                onUpdateSchema={setDetectedSchema}
                 onAutoTestRun={async (enemyName, winRate) => {
                   await MikiMemoryService.addMemory({
                     type: "test_result",

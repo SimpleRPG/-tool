@@ -31,14 +31,17 @@ import {
   Check,
   Package,
 } from "lucide-react";
+import { DetectedSchema } from "../types";
+import { EntityAddPanel } from "./EntityAddPanel";
 
 interface Props {
   files: SimpleRpgFile[];
   onUpdateFiles?: (files: SimpleRpgFile[]) => void;
   onAutoTestRun?: (enemyName: string, winRate: number) => void;
+  detectedSchema?: DetectedSchema | null;
 }
 
-export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTestRun }) => {
+export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTestRun, detectedSchema }) => {
   // 1. Deep-scan VFS or ZIP to discover all entities
   const scanReport = useMemo(() => {
     return SimpleRpgScanner.scanProject(files);
@@ -46,8 +49,8 @@ export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTest
 
   const { enemies, weapons, armors, items, skills, player: defaultPlayer } = scanReport;
 
-  // Active Tab: "enemy" | "equip" | "item_skill" | "player" | "battle"
-  const [activeTab, setActiveTab] = useState<"enemy" | "equip" | "item_skill" | "player" | "battle">("enemy");
+  // Active Tab: "enemy" | "equip" | "item_skill" | "player" | "battle" | "add"
+  const [activeTab, setActiveTab] = useState<"enemy" | "equip" | "item_skill" | "player" | "battle" | "add">("enemy");
 
   // Notification Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -460,6 +463,16 @@ export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTest
         >
           <Flame className="w-3.5 h-3.5" />
           🎮 戦闘シミュレータ
+        </button>
+        <button
+          onClick={() => setActiveTab("add")}
+          className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+            activeTab === "add"
+              ? "bg-emerald-500 text-slate-950"
+              : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+          }`}
+        >
+          ➕ 新規追加
         </button>
       </div>
 
@@ -898,6 +911,14 @@ export const RpgBattleLab: React.FC<Props> = ({ files, onUpdateFiles, onAutoTest
               )}
             </div>
           </div>
+        )}
+
+        {activeTab === "add" && (
+          <EntityAddPanel
+            schema={detectedSchema ?? null}
+            files={files}
+            onFilesUpdate={(updated) => onUpdateFiles?.(updated)}
+          />
         )}
       </div>
     </div>

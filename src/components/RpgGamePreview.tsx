@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { SimpleRpgFile } from "../types";
+import { SimpleRpgFile, DetectedSchema } from "../types";
 import { HtmlRunnerService } from "../services/htmlRunnerService";
 import { RpgBattleLab } from "./RpgBattleLab";
 import {
@@ -21,6 +21,8 @@ interface Props {
   onQuickPatch?: (text: string) => void;
   onAutoTestRun?: (enemyName: string, winRate: number) => void;
   onUpdateFiles?: (files: SimpleRpgFile[]) => void;
+  detectedSchema?: DetectedSchema | null;
+  onUpdateSchema?: (schema: DetectedSchema | null) => void;
 }
 
 export const RpgGamePreview: React.FC<Props> = ({
@@ -29,6 +31,8 @@ export const RpgGamePreview: React.FC<Props> = ({
   onQuickPatch,
   onAutoTestRun,
   onUpdateFiles,
+  detectedSchema,
+  onUpdateSchema,
 }) => {
   const [viewMode, setViewMode] = useState<"html5_live" | "battle_lab">("html5_live");
   const [iframeKey, setIframeKey] = useState<number>(0);
@@ -270,6 +274,7 @@ export const RpgGamePreview: React.FC<Props> = ({
               files={files}
               onAutoTestRun={onAutoTestRun}
               onUpdateFiles={onUpdateFiles}
+              detectedSchema={detectedSchema}
             />
           </div>
         )}

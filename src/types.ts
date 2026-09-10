@@ -139,3 +139,24 @@ export interface ApkExportConfig {
   orientation: "portrait" | "sensor" | "landscape";
   permissions: string[];
 }
+
+// ========================================================
+// Schema Detection (スキーマ解析)
+// ========================================================
+
+export interface DetectedArraySchema {
+  variableName: string;
+  sourceFile: string;
+  itemShape: Record<string, string>;
+  arrayPath: string;
+}
+
+export interface DetectedSchema {
+  weapons: DetectedArraySchema | null;
+  enemies: DetectedArraySchema | null;
+  armors: DetectedArraySchema | null;
+  items: DetectedArraySchema | null;
+  skills: DetectedArraySchema | null;
+  analyzerVersion: "local-regex" | "none";
+  analyzedAt: number;
+}
